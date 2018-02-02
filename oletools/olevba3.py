@@ -239,6 +239,7 @@ import struct
 from _io import StringIO,BytesIO
 from oletools import rtfobj
 import math
+from functools import reduce
 import zipfile
 import re
 import optparse
@@ -917,6 +918,17 @@ strReverse = Suppress(CaselessKeyword('StrReverse') + '(') + vba_expr_str + Supp
 strReverse.setParseAction(lambda t: VbaExpressionString(str(t[0])[::-1]))
 
 
+# --- VBA.Mid$() --------------------------------------------------------------------
+
+# VBA.Mid(string, int, int) => string
+vba_mid = Suppress(CaselessKeyword('VBA.Mid$') + '(') + vba_expr_str + Suppress(',') + vba_expr_int + Suppress(',') + vba_expr_int + Suppress(')')
+def vba_mid_eval(t):
+    start = t[1] - 1
+    length = t[2]
+    return int(t[0][start:start+length])
+vba_mid.setParseAction(vba_mid_eval)
+
+
 # --- ENVIRON() --------------------------------------------------------------------
 
 # Environ("name") => just translated to "%name%", that is enough for malware analysis
@@ -1024,7 +1036,7 @@ def divide_ints_list(tokens):
     return reduce(lambda x,y:x/y, integers)
 
 
-vba_expr_int_item = (vba_asc | vba_val | integer)
+vba_expr_int_item = (vba_asc | vba_val | integer | vba_mid)
 
 # operators associativity:
 # https://en.wikipedia.org/wiki/Operator_associativity
@@ -2898,7 +2910,7 @@ class VBA_Parser(object):
 
     def reveal(self):
         # we only want printable strings:
-        analysis = self.analyze_macros(show_decoded_strings=False)
+        analysis = self.analyze_macros(show_decoded_strings=False, deobfuscate=True)
         # to avoid replacing short strings contained into longer strings, we sort the analysis results
         # based on the length of the encoded string, in reverse order:
         analysis = sorted(analysis, key=lambda type_decoded_encoded: len(type_decoded_encoded[2]), reverse=True)
